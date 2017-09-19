@@ -2,15 +2,19 @@ package com.spbsu.datastream.core.range.atomic;
 
 import akka.actor.ActorRef;
 import akka.actor.Props;
-import com.spbsu.datastream.core.message.AtomicMessage;
 import com.spbsu.datastream.core.LoggingActor;
 import com.spbsu.datastream.core.ack.Commit;
 import com.spbsu.datastream.core.ack.MinTimeUpdate;
 import com.spbsu.datastream.core.graph.AtomicGraph;
+import com.spbsu.datastream.core.message.AtomicMessage;
 import com.spbsu.datastream.core.range.AtomicCommitDone;
 import com.spbsu.datastream.core.stat.AtomicActorStatistics;
 import com.spbsu.datastream.core.tick.TickInfo;
 import org.iq80.leveldb.DB;
+
+import java.util.LongSummaryStatistics;
+import java.util.NavigableMap;
+import java.util.TreeMap;
 
 public final class AtomicActor extends LoggingActor {
   private final AtomicActorStatistics stat = new AtomicActorStatistics();
@@ -53,16 +57,31 @@ public final class AtomicActor extends LoggingActor {
   @Override
   public void postStop() throws Exception {
     this.LOG().info("Atomic {} statistics: {}", atomic, stat);
+    final LongSummaryStatistics statistics = new LongSummaryStatistics();
+    assert acksDelay.isEmpty();
+    results.values()
+            .forEach(statistics::accept);
+
+    LOG().info("Ack delay {}: {} dist={}", this.atomic.getClass().toString(), statistics, results.values());
 
     super.postStop();
   }
+
+  private long upper(long ts) {
+    return this.handle.tickInfo().startTs() + this.handle.tickInfo().window() * ((ts - this.handle.tickInfo().startTs()) / this.handle.tickInfo().window() + 1);
+  }
+
+  private final NavigableMap<Long, Long> acksDelay = new TreeMap<>();
+  private final NavigableMap<Long, Long> results = new TreeMap<>();
 
   private void onAtomicMessage(AtomicMessage<?> message) {
     final long start = System.nanoTime();
     this.atomic.onPush(message.port(), message.payload(), this.handle);
     final long stop = System.nanoTime();
-
     this.handle.ack(message.payload());
+
+    final long lower = upper(message.payload().meta().globalTime().time());
+    this.acksDelay.put(lower, System.nanoTime());
 
     if (stop - start > 20E6) {
       LOG().warning("onAtomic took more than 20ms MES={} ATOM={} TS={}", message, this.atomic, stop - start);
@@ -71,6 +90,13 @@ public final class AtomicActor extends LoggingActor {
   }
 
   private void onMinTimeUpdate(MinTimeUpdate message) {
+    final Long floor = acksDelay.floorKey(message.minTime().time());
+
+    if (floor != null) {
+      results.put(floor, System.nanoTime() - acksDelay.get(floor));
+      acksDelay.remove(floor);
+    }
+
     final long start = System.nanoTime();
 
     this.atomic.onMinGTimeUpdate(message.minTime(), this.handle);

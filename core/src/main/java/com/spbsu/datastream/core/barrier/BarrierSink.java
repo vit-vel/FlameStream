@@ -8,6 +8,7 @@ import com.spbsu.datastream.core.range.atomic.AtomicHandle;
 import java.util.List;
 
 import static java.lang.String.format;
+import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 
 public final class BarrierSink implements AtomicGraph {
@@ -42,7 +43,7 @@ public final class BarrierSink implements AtomicGraph {
 
   @Override
   public ComposedGraph<AtomicGraph> flattened() {
-    return innerGraph.flattened();
+    return new ComposedGraphImpl<>(singleton(this));
   }
 
   @Override
@@ -63,6 +64,13 @@ public final class BarrierSink implements AtomicGraph {
   @Override
   public void onMinGTimeUpdate(GlobalTime globalTime, AtomicHandle handle) {
     innerGraph.onMinGTimeUpdate(globalTime, handle);
+  }
+
+  @Override
+  public String toString() {
+    return "BarrierSink{" +
+            "innerGraph=" + innerGraph +
+            '}';
   }
 
   private static final class Barrier extends AbstractAtomicGraph {
