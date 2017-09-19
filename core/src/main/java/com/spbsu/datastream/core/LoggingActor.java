@@ -10,7 +10,6 @@ import scala.runtime.BoxedUnit;
 
 import java.util.Optional;
 
-@Deprecated
 public abstract class LoggingActor extends AbstractActor {
   private final LoggingAdapter LOG = Logging.getLogger(this.context().system(), this.self());
 
