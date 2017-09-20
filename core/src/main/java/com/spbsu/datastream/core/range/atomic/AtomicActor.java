@@ -23,7 +23,7 @@ public final class AtomicActor extends LoggingActor {
 
   private AtomicActor(AtomicGraph atomic, TickInfo tickInfo, ActorRef dns, DB db) {
     this.atomic = atomic;
-    this.handle = new AtomicHandleImpl(tickInfo, dns, db, this.context());
+    this.handle = new AtomicHandleImpl(tickInfo, dns, db, context());
   }
 
   public static Props props(AtomicGraph atomic, TickInfo tickInfo, ActorRef dns, DB db) {
@@ -32,13 +32,13 @@ public final class AtomicActor extends LoggingActor {
 
   @Override
   public void preStart() throws Exception {
-    this.atomic.onStart(this.handle);
+    atomic.onStart(handle);
     super.preStart();
   }
 
   @Override
   public Receive createReceive() {
-    return this.receiveBuilder()
+    return receiveBuilder()
             .match(AtomicMessage.class, this::onAtomicMessage)
             .match(MinTimeUpdate.class, this::onMinTimeUpdate)
             .match(Commit.class, this::onCommit)
@@ -46,29 +46,29 @@ public final class AtomicActor extends LoggingActor {
   }
 
   private void onCommit(Commit commit) {
-    this.atomic.onCommit(this.handle);
-    this.context().parent().tell(new AtomicCommitDone(this.atomic), this.self());
-    this.LOG().info("Commit done");
-    this.context().stop(this.self());
+    atomic.onCommit(handle);
+    context().parent().tell(new AtomicCommitDone(atomic), self());
+    LOG().info("Commit done");
+    context().stop(self());
 
-    this.LOG().info("Atomic {} statistics: {}", atomic, stat);
+    LOG().info("Atomic {} statistics: {}", atomic, stat);
   }
 
   @Override
   public void postStop() throws Exception {
-    this.LOG().info("Atomic {} statistics: {}", atomic, stat);
+    LOG().info("Atomic {} statistics: {}", atomic, stat);
     final LongSummaryStatistics statistics = new LongSummaryStatistics();
     assert acksDelay.isEmpty();
     results.values()
             .forEach(statistics::accept);
 
-    LOG().info("Ack delay {}: {} dist={}", this.atomic.getClass().toString(), statistics, results.values());
+    LOG().info("Ack delay {}: {} dist={}", atomic.getClass().toString(), statistics, results.values());
 
     super.postStop();
   }
 
   private long upper(long ts) {
-    return this.handle.tickInfo().startTs() + this.handle.tickInfo().window() * ((ts - this.handle.tickInfo().startTs()) / this.handle.tickInfo().window() + 1);
+    return handle.tickInfo().startTs() + handle.tickInfo().window() * ((ts - handle.tickInfo().startTs()) / handle.tickInfo().window() + 1);
   }
 
   private final NavigableMap<Long, Long> acksDelay = new TreeMap<>();
@@ -76,15 +76,15 @@ public final class AtomicActor extends LoggingActor {
 
   private void onAtomicMessage(AtomicMessage<?> message) {
     final long start = System.nanoTime();
-    this.atomic.onPush(message.port(), message.payload(), this.handle);
+    atomic.onPush(message.port(), message.payload(), handle);
     final long stop = System.nanoTime();
-    this.handle.ack(message.payload());
+    handle.ack(message.payload());
 
     final long lower = upper(message.payload().meta().globalTime().time());
-    this.acksDelay.put(lower, System.nanoTime());
+    acksDelay.put(lower, System.nanoTime());
 
     if (stop - start > 20E6) {
-      LOG().warning("onAtomic took more than 20ms MES={} ATOM={} TS={}", message, this.atomic, stop - start);
+      LOG().warning("onAtomic took more than 20ms MES={} ATOM={} TS={}", message, atomic, stop - start);
     }
     stat.recordOnAtomicMessage(stop - start);
   }
@@ -99,7 +99,7 @@ public final class AtomicActor extends LoggingActor {
 
     final long start = System.nanoTime();
 
-    this.atomic.onMinGTimeUpdate(message.minTime(), this.handle);
+    atomic.onMinGTimeUpdate(message.minTime(), handle);
 
     final long stop = System.nanoTime();
     stat.recordOnMinTimeUpdate(stop - start);
