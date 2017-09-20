@@ -12,7 +12,9 @@ import com.spbsu.datastream.core.stat.AtomicActorStatistics;
 import com.spbsu.datastream.core.tick.TickInfo;
 import org.iq80.leveldb.DB;
 
+import java.util.HashMap;
 import java.util.LongSummaryStatistics;
+import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 
@@ -74,11 +76,14 @@ public final class AtomicActor extends LoggingActor {
   private final NavigableMap<Long, Long> acksDelay = new TreeMap<>();
   private final NavigableMap<Long, Long> results = new TreeMap<>();
 
+  public static final Map<Long, Long> acks = new HashMap<>(10000);
+
   private void onAtomicMessage(AtomicMessage<?> message) {
     final long start = System.nanoTime();
     atomic.onPush(message.port(), message.payload(), handle);
     final long stop = System.nanoTime();
     handle.ack(message.payload());
+    acks.put(message.payload().ack(), System.nanoTime());
 
     final long lower = upper(message.payload().meta().globalTime().time());
     acksDelay.put(lower, System.nanoTime());

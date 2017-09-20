@@ -2,13 +2,13 @@ package com.spbsu.datastream.core.tick;
 
 import akka.actor.ActorRef;
 import akka.actor.Props;
+import com.spbsu.datastream.core.LoggingActor;
+import com.spbsu.datastream.core.ack.AckActor;
+import com.spbsu.datastream.core.configuration.HashRange;
 import com.spbsu.datastream.core.message.AckerMessage;
 import com.spbsu.datastream.core.message.AtomicMessage;
 import com.spbsu.datastream.core.message.BroadcastMessage;
-import com.spbsu.datastream.core.LoggingActor;
 import com.spbsu.datastream.core.message.Message;
-import com.spbsu.datastream.core.ack.AckActor;
-import com.spbsu.datastream.core.configuration.HashRange;
 import com.spbsu.datastream.core.range.RangeConcierge;
 import org.iq80.leveldb.DB;
 
@@ -38,7 +38,12 @@ public final class TickConcierge extends LoggingActor {
             .forEach(range -> concierges.put(range.from(), rangeConcierge(range)));
     this.db = db;
     if (tickInfo.ackerLocation() == localId) {
-      this.acker = context().actorOf(AckActor.props(tickInfo, dns), "acker");
+      this.acker = context().actorOf(
+              AckActor.props(tickInfo, dns)
+                      //.withDispatcher("acker-dispatcher")
+                      .withMailbox("logging-mailbox"),
+              "acker"
+      );
     } else {
       this.acker = null;
     }
