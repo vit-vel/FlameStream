@@ -158,6 +158,7 @@ public class InvertedIndexRunner implements ClusterRunner {
 
     final Graph graph = wikiPageToPositions
             .fuse(chain, wikiPageToPositions.outPort(), merge.inPorts().get(0))
+            //.fuse(sink, metaFilter.outPort(), sink.inPort());
             .fuse(barrierSink, metaFilter.outPort(), barrierSink.inPort());
 
     final Map<Integer, InPort> frontBindings = fronts.stream()
