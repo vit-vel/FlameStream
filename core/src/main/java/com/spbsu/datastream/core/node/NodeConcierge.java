@@ -88,7 +88,7 @@ public final class NodeConcierge extends LoggingActor {
   private ActorPath pathFor(InetSocketAddress socketAddress) {
     // TODO: 5/8/17 Properly resolve ActorRef
     final Address address = Address.apply(
-            "akka.tcp",
+            "akka",
             "worker",
             socketAddress.getAddress().getHostName(),
             socketAddress.getPort()

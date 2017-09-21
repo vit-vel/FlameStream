@@ -5,7 +5,6 @@ import akka.actor.AbstractActorWithStash;
 import akka.actor.SupervisorStrategy;
 import akka.event.Logging;
 import akka.event.LoggingAdapter;
-import com.spbsu.datastream.core.node.UnresolvedMessage;
 import scala.PartialFunction;
 import scala.runtime.BoxedUnit;
 
