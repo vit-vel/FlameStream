@@ -31,15 +31,19 @@ public final class TestStand implements AutoCloseable {
 
   public TestStand(Cluster cluster) {
     this.cluster = cluster;
+    if (cluster instanceof LocalCluster) {
+      this.localSystem = ((LocalCluster) cluster).workerApplication.stream().findAny()
+              .orElseThrow(IllegalStateException::new).system;
+    } else {
+      try {
+        final Config config = ConfigFactory.parseString("akka.remote.netty.tcp.port=" + TestStand.LOCAL_SYSTEM_PORT)
+                .withFallback(ConfigFactory.parseString("akka.remote.netty.tcp.hostname=" + InetAddress.getLocalHost().getHostName()))
+                .withFallback(ConfigFactory.load("remote"));
 
-    try {
-      final Config config = ConfigFactory.parseString("akka.remote.netty.tcp.port=" + TestStand.LOCAL_SYSTEM_PORT)
-              .withFallback(ConfigFactory.parseString("akka.remote.netty.tcp.hostname=" + InetAddress.getLocalHost().getHostName()))
-              .withFallback(ConfigFactory.load("remote"));
-
-      this.localSystem = ActorSystem.create("requester", config);
-    } catch (UnknownHostException e) {
-      throw new UncheckedIOException(e);
+        this.localSystem = ActorSystem.create("requester", config);
+      } catch (UnknownHostException e) {
+        throw new UncheckedIOException(e);
+      }
     }
   }
 
@@ -66,9 +70,9 @@ public final class TestStand implements AutoCloseable {
     try {
       final String id = UUID.randomUUID().toString();
       localSystem.actorOf(CollectingActor.props(collection), id);
-      final Address add = Address.apply("akka.tcp", "requester",
+      final Address add = Address.apply("akka.tcp", "worker",
               InetAddress.getLocalHost().getHostName(),
-              TestStand.LOCAL_SYSTEM_PORT);
+              5223);
       return RootActorPath.apply(add, "/")
               .$div("user")
               .$div(id);

@@ -127,29 +127,29 @@ public final class Grouping<T> extends AbstractAtomicGraph {
 
   @Override
   public void onMinGTimeUpdate(GlobalTime globalTime, AtomicHandle handle) {
-    final Consumer<List<DataItem<T>>> removeOldConsumer = group -> {
-      if (group.size() < MIN_BUFFER_SIZE_FOR_MIN_TIME_UPDATE)
-        return;
-
-      int left = 0;
-      int right = group.size();
-      { //upper-bound binary search
-        while (right - left > 1) {
-          final int middle = left + (right - left) / 2;
-          if (group.get(middle).meta().globalTime().compareTo(globalTime) <= 0) {
-            left = middle;
-          } else {
-            right = middle;
-          }
-        }
-      }
-
-      final int position = Math.max(left - window, 0);
-      if (position > 0) {
-        group.subList(0, position).clear();
-      }
-    };
-    buffers.forEach(removeOldConsumer);
+    //final Consumer<List<DataItem<T>>> removeOldConsumer = group -> {
+    //  if (group.size() < MIN_BUFFER_SIZE_FOR_MIN_TIME_UPDATE)
+    //    return;
+    //
+    //  int left = 0;
+    //  int right = group.size();
+    //  { //upper-bound binary search
+    //    while (right - left > 1) {
+    //      final int middle = left + (right - left) / 2;
+    //      if (group.get(middle).meta().globalTime().compareTo(globalTime) <= 0) {
+    //        left = middle;
+    //      } else {
+    //        right = middle;
+    //      }
+    //    }
+    //  }
+    //
+    //  final int position = Math.max(left - window, 0);
+    //  if (position > 0) {
+    //    group.subList(0, position).clear();
+    //  }
+    //};
+    //buffers.forEach(removeOldConsumer);
   }
 
   public InPort inPort() {

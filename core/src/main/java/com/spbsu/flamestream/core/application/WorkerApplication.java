@@ -25,7 +25,7 @@ public final class WorkerApplication {
   private final String zkConnectString;
   private final int id;
 
-  private ActorSystem system;
+  public ActorSystem system;
 
   public WorkerApplication(int id, String zkConnectString) throws UnknownHostException {
     this.id = id;
