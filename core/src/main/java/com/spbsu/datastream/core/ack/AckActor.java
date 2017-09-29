@@ -5,7 +5,6 @@ import com.spbsu.datastream.core.LoggingActor;
 import com.spbsu.datastream.core.ack.impl.AckLedgerImpl;
 import com.spbsu.datastream.core.configuration.HashRange;
 import com.spbsu.datastream.core.meta.GlobalTime;
-import com.spbsu.datastream.core.range.atomic.AtomicHandleImpl;
 import com.spbsu.datastream.core.stat.AckerStatistics;
 import com.spbsu.datastream.core.tick.TickRoutes;
 import com.spbsu.datastream.core.tick.StartTick;
@@ -69,9 +68,6 @@ public final class AckActor extends LoggingActor {
   }
 
   private void handleAck(Ack ack) {
-    if (ack.xor() == AtomicHandleImpl.xor) {
-      LOG().info("Receiving ack {}", System.nanoTime());
-    }
     final long start = System.nanoTime();
     //assertMonotonicAck(ack.time());
 

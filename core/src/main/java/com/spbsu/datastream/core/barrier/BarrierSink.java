@@ -1,13 +1,7 @@
 package com.spbsu.datastream.core.barrier;
 
 import com.spbsu.datastream.core.DataItem;
-import com.spbsu.datastream.core.graph.AbstractAtomicGraph;
-import com.spbsu.datastream.core.graph.AtomicGraph;
-import com.spbsu.datastream.core.graph.ChaincallGraph;
-import com.spbsu.datastream.core.graph.ComposedGraph;
-import com.spbsu.datastream.core.graph.ComposedGraphImpl;
-import com.spbsu.datastream.core.graph.InPort;
-import com.spbsu.datastream.core.graph.OutPort;
+import com.spbsu.datastream.core.graph.*;
 import com.spbsu.datastream.core.meta.GlobalTime;
 import com.spbsu.datastream.core.range.atomic.AtomicHandle;
 
@@ -92,20 +86,12 @@ public final class BarrierSink implements AtomicGraph {
 
     @Override
     public void onPush(InPort inPort, DataItem<?> item, AtomicHandle handle) {
-      if (((PreBarrierMetaElement) item.payload()).payload().toString().contains("askdfwladsjflak")) {
-        handle.error("Enqueueing in barrier {}", System.nanoTime());
-      }
       collector.enqueue(item);
     }
 
     @Override
     public void onMinGTimeUpdate(GlobalTime globalTime, AtomicHandle handle) {
-      collector.releaseFrom(globalTime, di -> {
-        if (((PreBarrierMetaElement) di.payload()).payload().toString().contains("askdfwladsjflak")) {
-          handle.error("Releasing from barrier in barrier {}", System.nanoTime());
-        }
-        handle.push(outPort, di);
-      });
+      collector.releaseFrom(globalTime, di -> handle.push(outPort, di));
     }
 
     @Override

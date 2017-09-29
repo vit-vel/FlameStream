@@ -57,13 +57,8 @@ public final class AtomicHandleImpl implements AtomicHandle {
     ack(result);
   }
 
-  public static long xor = -1;
   @Override
   public void ack(DataItem<?> item) {
-    if (item.payload().toString().contains("askdfwladsjflak")) {
-      xor = item.ack();
-      LOG.info("Acking {}", System.nanoTime());
-    }
     final Ack message = new Ack(item.ack(), item.meta().globalTime());
     tickRoutes.acker().tell(message, context.self());
   }
