@@ -48,8 +48,8 @@ public final class RemoteEnvironment implements Environment {
   public RemoteEnvironment(String zookeeperString) {
     try {
       this.environmentAddress = InetAddress.getLocalHost();
-      final Config config = ConfigFactory.parseString("akka.remote.netty.tcp.port=" + SYSTEM_PORT)
-              .withFallback(ConfigFactory.parseString("akka.remote.netty.tcp.hostname=" + environmentAddress.getHostName()))
+      final Config config = ConfigFactory.parseString("akka.remote.artery.canonical.port=" + SYSTEM_PORT)
+              .withFallback(ConfigFactory.parseString("akka.remote.artery.canonical.hostname=" + environmentAddress.getHostName()))
               .withFallback(ConfigFactory.load("remote"));
 
       localSystem = ActorSystem.create(SYSTEM_NAME, config);
@@ -95,7 +95,7 @@ public final class RemoteEnvironment implements Environment {
 
   private ActorPath wrapperPath(String suffix) {
     final Address address = new Address(
-            "akka.tcp",
+            "akka",
             SYSTEM_NAME,
             environmentAddress.getHostName(),
             SYSTEM_PORT
@@ -120,7 +120,7 @@ public final class RemoteEnvironment implements Environment {
 
   private ActorPath frontPath(InetSocketAddress frontAddress) {
     final Address address = new Address(
-            "akka.tcp",
+            "akka",
             "worker",
             frontAddress.getAddress().getHostName(),
             frontAddress.getPort()
