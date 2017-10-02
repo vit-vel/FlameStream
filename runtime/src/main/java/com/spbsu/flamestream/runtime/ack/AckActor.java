@@ -4,7 +4,7 @@ import akka.actor.ActorRef;
 import akka.actor.Props;
 import akka.japi.pf.ReceiveBuilder;
 import com.spbsu.flamestream.core.data.meta.GlobalTime;
-import com.spbsu.flamestream.runtime.ack.impl.AckLedgerImpl;
+import com.spbsu.flamestream.runtime.ack.impl.ArrayAckTable;
 import com.spbsu.flamestream.runtime.actor.LoggingActor;
 import com.spbsu.flamestream.runtime.range.HashRange;
 import com.spbsu.flamestream.runtime.tick.StartTick;
@@ -16,19 +16,20 @@ import java.util.Collection;
 import java.util.HashSet;
 
 public final class AckActor extends LoggingActor {
-  private final AckLedger ledger;
   private final TickInfo tickInfo;
+  private final AckTable ackTable;
   private final ActorRef tickWatcher;
   private final AckerStatistics stat = new AckerStatistics();
   private final Collection<HashRange> committers = new HashSet<>();
-  private GlobalTime currentMin = GlobalTime.MIN;
+
+  private long currentMin = Long.MIN_VALUE;
   @Nullable
   private TickRoutes tickRoutes;
 
   private AckActor(TickInfo tickInfo, ActorRef tickWatcher) {
-    this.ledger = new AckLedgerImpl(tickInfo);
     this.tickInfo = tickInfo;
     this.tickWatcher = tickWatcher;
+    this.ackTable = new ArrayAckTable(tickInfo.startTs(), tickInfo.stopTs(), tickInfo.window());
   }
 
   public static Props props(TickInfo tickInfo, ActorRef tickWatcher) {
@@ -50,7 +51,7 @@ public final class AckActor extends LoggingActor {
 
   private Receive acking() {
     return ReceiveBuilder.create()
-            .match(AckerReport.class, this::handleReport)
+            .match(RequestGlobalTime.class, this::handleRequestGT)
             .match(Ack.class, this::handleAck)
             .build();
   }
@@ -59,49 +60,49 @@ public final class AckActor extends LoggingActor {
   public void postStop() {
     super.postStop();
     LOG().info("Acker statistics: {}", stat);
-
-    LOG().debug("Acker ledger: {}", ledger);
+    LOG().debug("Acker table: {}", ackTable);
   }
 
-  private void handleReport(AckerReport report) {
-    LOG().debug("Front report received: {}", report);
-    ledger.report(report.globalTime(), report.xor());
-    checkLedgerTime();
+  private void handleRequestGT(RequestGlobalTime request) {
+    final long ts = System.nanoTime();
+    ackTable.ack(ts, request.xor());
+    sender().tell(new GlobalTime(ts, tickInfo.ackerLocation()), self());
   }
 
   private void handleAck(Ack ack) {
     final long start = System.nanoTime();
     //assertMonotonicAck(ack.time());
 
-    if (ledger.ack(ack.time(), ack.xor())) {
-      checkLedgerTime();
+    if (ackTable.ack(ack.time().time(), ack.xor())) {
+      checkMinTime();
       stat.recordReleasingAck(System.nanoTime() - start);
     } else {
       stat.recordNormalAck(System.nanoTime() - start);
     }
   }
 
-  private void checkLedgerTime() {
-    final GlobalTime ledgerMin = ledger.min();
-    if (ledgerMin.compareTo(currentMin) > 0) {
-      this.currentMin = ledgerMin;
-      sendMinUpdates(currentMin);
+  private void checkMinTime() {
+    final long min = ackTable.min(System.nanoTime());
+    if (min > currentMin) {
+      currentMin = min;
+      sendMinUpdates(new GlobalTime(currentMin, tickInfo.ackerLocation()));
     }
 
-    if (ledgerMin.time() == tickInfo.stopTs()) {
+    if (min == tickInfo.stopTs()) {
       sendCommit();
       getContext().become(
               ReceiveBuilder.create()
                       .match(RangeCommitDone.class, this::handleDone)
                       .build()
       );
-    } else if (ledgerMin.time() > tickInfo.stopTs()) {
-      throw new IllegalStateException("Ledger min must be less or equal to tick stop ts");
+    } else if (min > tickInfo.stopTs()) {
+      throw new IllegalStateException("Min must be less or equal to tick stop ts");
     }
   }
 
-  private void assertMonotonicAck(GlobalTime newTime) {
-    if (newTime.compareTo(currentMin) < 0) {
+  @SuppressWarnings("unused")
+  private void assertMonotonicAck(long newTime) {
+    if (newTime < currentMin) {
       throw new IllegalStateException("Not monotonic acks. Fixme");
     }
   }
@@ -120,12 +121,14 @@ public final class AckActor extends LoggingActor {
 
   private void sendCommit() {
     LOG().info("Committing");
+    //noinspection ConstantConditions
     tickRoutes.rangeConcierges().values()
             .forEach(r -> r.tell(new Commit(), self()));
   }
 
   private void sendMinUpdates(GlobalTime min) {
     LOG().debug("New min time: {}", min);
+    //noinspection ConstantConditions
     tickRoutes.rangeConcierges().values()
             .forEach(r -> r.tell(new MinTimeUpdate(min), self()));
   }

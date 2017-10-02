@@ -2,55 +2,40 @@ package com.spbsu.flamestream.runtime.ack.impl;
 
 import com.spbsu.flamestream.runtime.ack.AckTable;
 
-final class ArrayAckTable implements AckTable {
+public final class ArrayAckTable implements AckTable {
   private final long startTs;
   private final long window;
   private final long[] xorStorage;
 
   private int minPosition;
-  private long toBeReported;
 
-  ArrayAckTable(long startTs, long stopTs, long window) {
+  public ArrayAckTable(long startTs, long stopTs, long window) {
     this.startTs = startTs;
     this.window = window;
 
     final int xorStorageSize = Math.toIntExact((stopTs - startTs) / window);
     this.xorStorage = new long[xorStorageSize];
-    this.minPosition = xorStorageSize;
-    this.toBeReported = startTs;
-  }
-
-  @Override
-  public void report(long windowHead, long xor) {
-    if (windowHead == toBeReported) {
-      ack(windowHead, xor);
-      this.toBeReported += window;
-    } else {
-      throw new IllegalArgumentException("Not monotonic reports. Expected: " + toBeReported + ", got: " + windowHead);
-    }
+    this.minPosition = 0;
   }
 
   @Override
   public boolean ack(long ts, long xor) {
-    final int position = Math.toIntExact(((ts - startTs) / window));
+    final int position = position(ts);
     final long updatedXor = xor ^ xorStorage[position];
     xorStorage[position] = updatedXor;
+    return updatedXor == 0 && xor != 0 && position == minPosition;
+  }
 
-    if (updatedXor == 0 && xor != 0 && position == minPosition) {
-      while (minPosition < xorStorage.length && xorStorage[minPosition] == 0)
-        this.minPosition++;
-      return true;
-    } else if (updatedXor != 0 && position < minPosition) {
-      this.minPosition = position;
-      return true;
-    } else {
-      return false;
-    }
+  private int position(long ts) {
+    return Math.toIntExact(((ts - startTs) / window));
   }
 
   @Override
-  public long min() {
-    return Math.min(toBeReported, startTs + window * minPosition);
+  public long min(long ts) {
+    final int position = position(ts);
+    while (minPosition <= position && xorStorage[minPosition] == 0)
+      this.minPosition++;
+    return startTs + window * minPosition;
   }
 
   @Override
@@ -58,7 +43,6 @@ final class ArrayAckTable implements AckTable {
     return "ArrayAckTable{" +
             ", startTs=" + startTs +
             ", window=" + window +
-            ", toBeReported=" + toBeReported +
             '}';
   }
 }

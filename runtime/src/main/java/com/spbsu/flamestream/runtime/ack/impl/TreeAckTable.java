@@ -5,29 +5,16 @@ import com.spbsu.flamestream.runtime.ack.AckTable;
 import java.util.SortedMap;
 import java.util.TreeMap;
 
-final class TreeAckTable implements AckTable {
+public final class TreeAckTable implements AckTable {
   // FIXME: 7/6/17 DO NOT BOX
   private final SortedMap<Long, Long> table;
   private final long startTs;
   private final long window;
 
-  private long toBeReported;
-
-  TreeAckTable(long startTs, long window) {
+  public TreeAckTable(long startTs, long window) {
     this.startTs = startTs;
     this.window = window;
     this.table = new TreeMap<>();
-    this.toBeReported = startTs;
-  }
-
-  @Override
-  public void report(long windowHead, long xor) {
-    if (windowHead == toBeReported) {
-      ack(windowHead, xor);
-      this.toBeReported += window;
-    } else {
-      throw new IllegalArgumentException("Not monotonic reports. Expected: " + toBeReported + ", got: " + windowHead);
-    }
   }
 
   @Override
@@ -44,8 +31,8 @@ final class TreeAckTable implements AckTable {
   }
 
   @Override
-  public long min() {
-    return table.isEmpty() ? toBeReported : Math.min(toBeReported, table.firstKey());
+  public long min(long ts) {
+    return table.isEmpty() ? ts : Math.min(ts, table.firstKey());
   }
 
   @Override
@@ -53,7 +40,6 @@ final class TreeAckTable implements AckTable {
     return "TreeAckTable{" + "table=" + table +
             ", startTs=" + startTs +
             ", window=" + window +
-            ", toBeReported=" + toBeReported +
             '}';
   }
 }
