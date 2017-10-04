@@ -1,11 +1,13 @@
 package com.spbsu.flamestream.runtime.range.atomic;
 
+import akka.actor.ActorRef;
 import akka.actor.Props;
 import com.spbsu.flamestream.core.graph.AtomicGraph;
 import com.spbsu.flamestream.core.graph.AtomicHandle;
 import com.spbsu.flamestream.runtime.ack.Commit;
 import com.spbsu.flamestream.runtime.ack.MinTimeUpdate;
 import com.spbsu.flamestream.runtime.actor.LoggingActor;
+import com.spbsu.flamestream.runtime.actor.PingActor;
 import com.spbsu.flamestream.runtime.range.AddressedItem;
 import com.spbsu.flamestream.runtime.range.AtomicCommitDone;
 import com.spbsu.flamestream.runtime.tick.TickInfo;
@@ -15,10 +17,15 @@ public final class AtomicActor extends LoggingActor {
   private final AtomicActorStatistics stat = new AtomicActorStatistics();
   private final AtomicGraph atomic;
   private final AtomicHandle handle;
+  private final ActorRef pingActor;
 
   private AtomicActor(AtomicGraph atomic, TickInfo tickInfo, TickRoutes tickRoutes) {
     this.atomic = atomic;
     this.handle = new AtomicHandleImpl(tickInfo, tickRoutes, context());
+    this.pingActor = context().actorOf(
+            PingActor.props(self(), tickInfo.window(), FlushAcks.FLUSH).withDispatcher("ping-dispatcher"),
+            "flush-acks"
+    );
   }
 
   public static Props props(AtomicGraph atomic, TickInfo tickInfo, TickRoutes tickRoutes) {
@@ -28,6 +35,7 @@ public final class AtomicActor extends LoggingActor {
   @Override
   public void preStart() throws Exception {
     atomic.onStart(handle);
+    pingActor.tell(PingActor.API.START, self());
     super.preStart();
   }
 
@@ -36,11 +44,12 @@ public final class AtomicActor extends LoggingActor {
     return receiveBuilder()
             .match(AddressedItem.class, this::onAtomicMessage)
             .match(MinTimeUpdate.class, this::onMinTimeUpdate)
-            .match(Commit.class, this::onCommit)
+            .match(Commit.class, commit -> onCommit())
+            .match(FlushAcks.class, flushAcks -> flushAcks())
             .build();
   }
 
-  private void onCommit(Commit commit) {
+  private void onCommit() {
     atomic.onCommit(handle);
     context().parent().tell(new AtomicCommitDone(atomic), self());
     LOG().info("Commit done");
@@ -51,6 +60,7 @@ public final class AtomicActor extends LoggingActor {
   @Override
   public void postStop() {
     LOG().info("Atomic {} statistics: {}", atomic, stat);
+    pingActor.tell(PingActor.API.STOP, self());
     super.postStop();
   }
 
@@ -71,5 +81,13 @@ public final class AtomicActor extends LoggingActor {
 
     final long stop = System.nanoTime();
     stat.recordOnMinTimeUpdate(stop - start);
+  }
+
+  private void flushAcks() {
+    handle.flushAcks();
+  }
+
+  private enum FlushAcks {
+    FLUSH
   }
 }

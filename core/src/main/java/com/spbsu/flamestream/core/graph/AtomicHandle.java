@@ -8,6 +8,8 @@ public interface AtomicHandle {
 
   void ack(DataItem<?> item);
 
+  void flushAcks();
+
   void submitStatistics(Statistics stat);
 
   void error(String format, Object... args);

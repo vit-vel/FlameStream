@@ -24,6 +24,10 @@ public final class FakeAtomicHandle implements AtomicHandle {
   }
 
   @Override
+  public void flushAcks() {
+  }
+
+  @Override
   public void submitStatistics(Statistics stat) {
   }
 

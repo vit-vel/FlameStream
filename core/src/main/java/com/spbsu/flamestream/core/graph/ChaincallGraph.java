@@ -83,6 +83,11 @@ public final class ChaincallGraph implements AtomicGraph {
     }
 
     @Override
+    public void flushAcks() {
+      superHandle.flushAcks();
+    }
+
+    @Override
     public void submitStatistics(Statistics stat) {
       superHandle.submitStatistics(stat);
     }

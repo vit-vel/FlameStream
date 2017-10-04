@@ -5,6 +5,7 @@ import akka.actor.ActorRef;
 import akka.event.Logging;
 import akka.event.LoggingAdapter;
 import com.spbsu.flamestream.core.data.DataItem;
+import com.spbsu.flamestream.core.data.meta.GlobalTime;
 import com.spbsu.flamestream.core.graph.AtomicHandle;
 import com.spbsu.flamestream.core.graph.InPort;
 import com.spbsu.flamestream.core.graph.OutPort;
@@ -14,6 +15,8 @@ import com.spbsu.flamestream.runtime.range.AddressedItem;
 import com.spbsu.flamestream.runtime.tick.HashMapping;
 import com.spbsu.flamestream.runtime.tick.TickInfo;
 import com.spbsu.flamestream.runtime.tick.TickRoutes;
+import gnu.trove.map.TObjectLongMap;
+import gnu.trove.map.hash.TObjectLongHashMap;
 
 import java.util.function.ToIntFunction;
 
@@ -24,6 +27,7 @@ public final class AtomicHandleImpl implements AtomicHandle {
   private final TickRoutes tickRoutes;
 
   private final HashMapping<ActorRef> hashMapping;
+  private final TObjectLongMap<GlobalTime> xorBuffer = new TObjectLongHashMap<>();
 
   AtomicHandleImpl(TickInfo tickInfo, TickRoutes tickRoutes, ActorContext context) {
     this.tickInfo = tickInfo;
@@ -53,8 +57,28 @@ public final class AtomicHandleImpl implements AtomicHandle {
 
   @Override
   public void ack(DataItem<?> item) {
-    final Ack message = new Ack(item.ack(), item.meta().globalTime());
-    tickRoutes.acker().tell(message, context.self());
+    /*final Ack message = new Ack(item.ack(), item.meta().globalTime());
+    tickRoutes.acker().tell(message, context.self());*/
+    final long lower = lower(item.meta().globalTime().time());
+    final GlobalTime globalTime = new GlobalTime(lower, item.meta().globalTime().front());
+    xorBuffer.put(globalTime, xorBuffer.get(globalTime) ^ item.ack());
+  }
+
+  @Override
+  public void flushAcks() {
+    xorBuffer.forEachEntry((globalTime, xor) -> {
+      if (xor != 0L) {
+        final Ack message = new Ack(xor, globalTime);
+        tickRoutes.acker().tell(message, context.self());
+      }
+      return true;
+    });
+    xorBuffer.clear();
+
+  }
+
+  private long lower(long ts) {
+    return tickInfo.startTs() + tickInfo.window() * ((ts - tickInfo.startTs()) / tickInfo.window());
   }
 
   @Override
