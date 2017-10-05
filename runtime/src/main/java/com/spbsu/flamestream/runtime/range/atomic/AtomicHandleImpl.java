@@ -29,6 +29,8 @@ public final class AtomicHandleImpl implements AtomicHandle {
   private final HashMapping<ActorRef> hashMapping;
   private final TObjectLongMap<GlobalTime> xorBuffer = new TObjectLongHashMap<>();
 
+  private long prevAckTs = -1;
+
   AtomicHandleImpl(TickInfo tickInfo, TickRoutes tickRoutes, ActorContext context) {
     this.tickInfo = tickInfo;
     this.tickRoutes = tickRoutes;
@@ -57,24 +59,31 @@ public final class AtomicHandleImpl implements AtomicHandle {
 
   @Override
   public void ack(DataItem<?> item) {
-    /*final Ack message = new Ack(item.ack(), item.meta().globalTime());
-    tickRoutes.acker().tell(message, context.self());*/
-    final long lower = lower(item.meta().globalTime().time());
-    final GlobalTime globalTime = new GlobalTime(lower, item.meta().globalTime().front());
-    xorBuffer.put(globalTime, xorBuffer.get(globalTime) ^ item.ack());
+    final GlobalTime itemGlobalTime = item.meta().globalTime();
+    final long itemTime = itemGlobalTime.time();
+
+    final long lower = lower(itemTime);
+    final GlobalTime windowGlobalTime = new GlobalTime(lower, itemGlobalTime.front());
+    xorBuffer.put(windowGlobalTime, xorBuffer.get(windowGlobalTime) ^ item.ack());
+
+    if ((prevAckTs != -1) && (itemTime - prevAckTs > tickInfo.window())) {
+      flushAcks();
+    }
+    prevAckTs = itemTime;
   }
 
   @Override
   public void flushAcks() {
-    xorBuffer.forEachEntry((globalTime, xor) -> {
-      if (xor != 0L) {
-        final Ack message = new Ack(xor, globalTime);
-        tickRoutes.acker().tell(message, context.self());
-      }
-      return true;
-    });
-    xorBuffer.clear();
-
+    if (xorBuffer.size() > 0) {
+      xorBuffer.forEachEntry((globalTime, xor) -> {
+        if (xor != 0L) {
+          final Ack message = new Ack(xor, globalTime);
+          tickRoutes.acker().tell(message, context.self());
+        }
+        return true;
+      });
+      xorBuffer.clear();
+    }
   }
 
   private long lower(long ts) {
