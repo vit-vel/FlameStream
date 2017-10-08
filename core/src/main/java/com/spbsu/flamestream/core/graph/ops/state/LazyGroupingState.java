@@ -1,5 +1,6 @@
 package com.spbsu.flamestream.core.graph.ops.state;
 
+import com.spbsu.flamestream.core.data.DataGroup;
 import com.spbsu.flamestream.core.data.DataItem;
 import gnu.trove.map.TLongObjectMap;
 import gnu.trove.map.hash.TLongObjectHashMap;
@@ -28,68 +29,64 @@ public final class LazyGroupingState<T> implements GroupingState<T> {
 
   @SuppressWarnings("unchecked")
   @Override
-  public List<DataItem<T>> getGroupFor(DataItem<T> item) {
+  public DataGroup<T> getGroupFor(DataItem<T> item) {
     final long hashValue = hash.applyAsInt(item.payload());
     final Object obj = buffers.get(hashValue);
     if (obj == null) {
-      final List<DataItem<T>> newBucket = new ArrayList<>();
-      buffers.put(hashValue, newBucket);
-      return newBucket;
+      final DataGroup<T> newGroup = new DataGroup<>();
+      buffers.put(hashValue, newGroup);
+      return newGroup;
+    } else if (obj instanceof DataGroup<?>) {
+      final DataGroup<T> group = (DataGroup<T>) obj;
+      return getFromBucket(item, group);
     } else {
-      final List<?> list = (List<?>) obj;
-      if (list.get(0) instanceof List) {
-        final List<List<DataItem<T>>> container = (List<List<DataItem<T>>>) list;
+        final List<DataGroup<T>> container = (List<DataGroup<T>>) obj;
         return getFromContainer(item, container);
-      } else {
-        final List<DataItem<T>> bucket = (List<DataItem<T>>) list;
-        return getFromBucket(item, bucket);
-      }
     }
   }
 
-  private List<DataItem<T>> getFromContainer(DataItem<T> item, List<List<DataItem<T>>> container) {
-    final List<DataItem<T>> result = searchBucket(item, container);
+  private DataGroup<T> getFromContainer(DataItem<T> item, List<DataGroup<T>> container) {
+    final DataGroup<T> result = searchBucket(item, container);
     if (result.isEmpty()) {
       container.add(result);
-      return result;
-    } else {
-      return result;
     }
+    return result;
   }
 
-  private List<DataItem<T>> getFromBucket(DataItem<T> item, List<DataItem<T>> bucket) {
-    if (equalz.test(bucket.get(0).payload(), item.payload())) {
+  private DataGroup<T> getFromBucket(DataItem<T> item, DataGroup<T> bucket) {
+    if (equalz.test(bucket.getItem(0).payload(), item.payload())) {
       return bucket;
     } else {
-      final List<List<DataItem<T>>> container = new ArrayList<>();
+      final List<DataGroup<T>> container = new ArrayList<>();
       container.add(bucket);
-      final List<DataItem<T>> newList = new ArrayList<>();
+      final DataGroup<T> newList = new DataGroup<>();
       container.add(newList);
       buffers.put(hash.applyAsInt(item.payload()), container);
       return newList;
     }
   }
 
+
   @Override
-  public void forEach(Consumer<List<DataItem<T>>> consumer) {
+  public void forEach(Consumer<DataGroup<T>> consumer) {
     buffers.forEachValue(obj -> {
       final List<?> list = (List<?>) obj;
       if (list.get(0) instanceof List) {
         //noinspection unchecked
-        final List<List<DataItem<T>>> buckets = (List<List<DataItem<T>>>) list;
+        final List<DataGroup<T>> buckets = (List<DataGroup<T>>) list;
         buckets.forEach(consumer);
       } else {
         //noinspection unchecked
-        consumer.accept((List<DataItem<T>>) list);
+        consumer.accept((DataGroup<T>) list);
       }
       return true;
     });
   }
 
-  private List<DataItem<T>> searchBucket(DataItem<T> item, List<List<DataItem<T>>> container) {
+  private DataGroup<T> searchBucket(DataItem<T> item, List<DataGroup<T>> container) {
     return container.stream()
-            .filter(bucket -> equalz.test(bucket.get(0).payload(), item.payload()))
-            .findAny()
-            .orElse(new ArrayList<>());
+        .filter(bucket -> equalz.test(bucket.getItem(0).payload(), item.payload()))
+        .findFirst()
+        .orElse(new DataGroup<>());
   }
 }

@@ -8,4 +8,8 @@ public interface DataItem<T> {
   T payload();
 
   long ack();
+
+  default Boolean isInvalidatedBy(DataItem<T> that) {
+    return this.meta().isInvalidatedBy(that.meta());
+  }
 }
